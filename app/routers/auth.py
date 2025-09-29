@@ -100,16 +100,15 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     return {"detail": "Email verified"}
 
 
-@router.post("/refresh")
-def refresh_token(refresh_token: str):
-    """Оновлює access_token за валідним refresh_token."""
+@router.post("/refresh", response_model=schemas.Token)
+def refresh_token(body: schemas.RefreshRequest):
     try:
-        payload = decode_token(refresh_token)
+        payload = decode_token(body.refresh_token)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     if payload.get("scope") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid token scope")
-    user_id = int(payload.get("sub"))
+    user_id = int(payload["sub"])
     access = create_access_token(subject=user_id, scope="access")
     return {"access_token": access, "token_type": "bearer"}
 

@@ -11,10 +11,10 @@ os.environ.setdefault("CLOUDINARY_URL", "")   # щоб не чіплявся SDK
 # import tempfile, pathlib, sys
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.database import get_db
+from app.database import get_db, engine as app_engine
 from app.models import Base
 from app.settings import settings
 
@@ -31,6 +31,16 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture(autouse=True)
+def _clean_db_before_each_test():
+    # Страховка: убеждаемся, что это тестовая БД
+    db_url = str(app_engine.url)
+    assert any(tag in db_url for tag in ("contacts_test", "_test")), f"Refusing to TRUNCATE non-test DB: {db_url}"
+
+    # Чистим СРАЗУ перед тестом
+    with app_engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE public.contacts, public.users, public.app_meta RESTART IDENTITY CASCADE"))
 
 def override_get_db():
     db = TestingSessionLocal()

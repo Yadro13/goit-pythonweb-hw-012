@@ -18,12 +18,14 @@ _client = None
 def get_redis():
     """Повертає singleton-клієнт Redis або None, якщо REDIS_URL не задано."""
     global _client
-    if settings.REDIS_URL is None or not settings.REDIS_URL:
-        return None
-    if redis is None:
+    if not settings.REDIS_URL or redis is None:
         return None
     if _client is None:
-        _client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        # підтримуємо і redis.from_url, і redis.Redis.from_url
+        if hasattr(redis, "from_url"):
+            _client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        else:
+            _client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
     return _client
 
 def cache_user(user: Any, ttl: int | None = None) -> None:

@@ -5,6 +5,20 @@ from sqlalchemy import select, or_, func
 from . import models, schemas
 from .security import hash_password, verify_password
 
+
+def _payload_from(data):
+    # Універсальний перетворювач у dict (укр. коментар)
+    if hasattr(data, "model_dump"):
+        return data.model_dump()
+    if isinstance(data, dict):
+        return data
+    try:
+        # берем только известные поля, чтобы не хватать лишнего
+        fields = ["first_name", "last_name", "email", "phone", "birthday", "extra"]
+        return {k: getattr(data, k) for k in fields if hasattr(data, k)}
+    except Exception:
+        return data.__dict__
+
 # --- Users ---
 def create_user(db: Session, data: schemas.UserCreate) -> models.User:
     exists = db.scalar(select(func.count()).select_from(models.User).where(models.User.email == data.email))
@@ -26,7 +40,7 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[models
 
 # --- Contacts (scoped by owner) ---
 def create_contact(db: Session, owner_id: int, data: schemas.ContactCreate) -> models.Contact:
-    obj = models.Contact(**data.model_dump(), owner_id=owner_id)
+    obj = models.Contact(**_payload_from(data), owner_id=owner_id)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -53,18 +67,19 @@ def list_contacts(db: Session, owner_id: int, skip: int = 0, limit: int = 100,
     return list(db.scalars(stmt).all())
 
 def update_contact(db: Session, owner_id: int, contact_id: int, data: schemas.ContactUpdate) -> Optional[models.Contact]:
-    obj = db.scalar(select(models.Contact).where(models.Contact.id == contact_id, models.Contact.owner_id == owner_id))
+    obj = get_contact(db, owner_id, contact_id)
     if not obj:
         return None
-    payload = data.model_dump(exclude_unset=True)
+    payload = _payload_from(data)
     for k, v in payload.items():
-        setattr(obj, k, v)
+        if v is not None and hasattr(obj, k):
+            setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
     return obj
 
 def delete_contact(db: Session, owner_id: int, contact_id: int) -> bool:
-    obj = db.scalar(select(models.Contact).where(models.Contact.id == contact_id, models.Contact.owner_id == owner_id))
+    obj = get_contact(db, owner_id, contact_id)
     if not obj:
         return False
     db.delete(obj)

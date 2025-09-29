@@ -1,30 +1,105 @@
 $ python -m pytest -q --cov=app
-ImportError while loading conftest 'D:\1\FullStackWebPython\HT12\tests\conftest.py'.
-tests\conftest.py:5: in <module>
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-E   NameError: name 'sys' is not defined. Did you forget to import 'sys'
-(HT12) 
-denis@Lenovo-YOGA-Den MINGW64 /d/1/FullStackWebPython/HT12
-$ python -m pytest -q --cov=app
-F..                                                                                                                                                                                                             [100%]
+F..F...FF.                                                                                                                                                                                                      [100%]
 ====================================================================================================== FAILURES ====================================================================================================== 
-________________________________________________________________________________________ test_register_and_login_and_refresh _________________________________________________________________________________________ 
+_______________________________________________________________________________________ test_register_login_refresh_and_verify _______________________________________________________________________________________ 
 
-client = <starlette.testclient.TestClient object at 0x000001BCFF674F80>
+client = <starlette.testclient.TestClient object at 0x000002BD2607FB60>
 
-    def test_register_and_login_and_refresh(client: TestClient):
-        # register
-        r = client.post("/auth/register", json={"email":"t1@example.com","password":"password123"})
+    def test_register_login_refresh_and_verify(client: TestClient):
+        r = client.post("/auth/register", json={"email":"e2@example.com","password":"pass12345"})
         assert r.status_code == 201
-        # verify via link (simulate by grabbing token from /auth/verify-email through fake generate)
-        # проще: логин и работа без verify на контактах запрещена, но /auth/login должен работать
-        r = client.post("/auth/login", data={"username":"t1@example.com","password":"password123"})
-        assert r.status_code == 200
-        data = r.json()
->       assert "access_token" in data and "refresh_token" in data
-E       AssertionError: assert ('access_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token_type': 'bearer'} and 'refresh_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token_type': 'bearer'})
+        r2 = client.post("/auth/login", data={"username":"e2@example.com","password":"bad"})
+        assert r2.status_code == 401
+        r3 = client.post("/auth/login", data={"username":"e2@example.com","password":"pass12345"})
+        data = r3.json()
+        assert "access_token" in data and "refresh_token" in data
+        r4 = client.post("/auth/refresh", json={"refresh_token":"xxx"})
+        assert r4.status_code in (400,401,422)
+        r5 = client.post("/auth/refresh", json={"refresh_token": data["refresh_token"]})
+>       assert r5.status_code == 200
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
 
-tests\test_auth_flow.py:13: AssertionError
+tests\test_auth_endpoints_more.py:15: AssertionError
+_____________________________________________________________________________________________ test_cache_with_fakeredis ______________________________________________________________________________________________ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002BD278BDAC0>
+
+    def test_cache_with_fakeredis(monkeypatch):
+        r = fakeredis.FakeRedis(decode_responses=True)
+        class DummyRedis:
+            @staticmethod
+            def from_url(url, decode_responses=True):
+                return r
+        monkeypatch.setattr(cache, "redis", DummyRedis)
+        monkeypatch.setattr(settings, "REDIS_URL", "redis://dummy/0")
+        class U:
+            def __init__(self):
+                self.id=123; self.email="x@e.com"; self.is_active=True; self.is_verified=True; self.avatar_url=None; self.role="user"
+        u = U()
+>       cache.cache_user(u, ttl=1)
+
+tests\test_cache_module_unit.py:23:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+app\cache.py:31: in cache_user
+    r = get_redis()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+
+    def get_redis():
+        """Повертає singleton-клієнт Redis або None, якщо REDIS_URL не задано."""
+        global _client
+        if settings.REDIS_URL is None or not settings.REDIS_URL:
+            return None
+        if redis is None:
+            return None
+        if _client is None:
+>           _client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+E           AttributeError: type object 'DummyRedis' has no attribute 'Redis'
+
+app\cache.py:26: AttributeError
+_____________________________________________________________________________________________ test_contacts_crud_filters _____________________________________________________________________________________________ 
+
+    def test_contacts_crud_filters():
+        from app.database import SessionLocal
+        db: Session = SessionLocal()
+        owner = crud.create_user(db, type("obj", (), {"email":"c2@example.com","password":"password123"}))
+>       c1 = crud.create_contact(db, owner.id, type("obj", (), {
+            "first_name":"John","last_name":"Smith","email":"john@x.com","phone":"12345","birthday":date(1990,5,10),"extra":None
+        }))
+
+tests\test_crud_module.py:28:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+
+db = <sqlalchemy.orm.session.Session object at 0x000002BD278BC890>, owner_id = 2, data = <class 'test_crud_module.obj'>
+
+    def create_contact(db: Session, owner_id: int, data: schemas.ContactCreate) -> models.Contact:
+>       obj = models.Contact(**data.model_dump(), owner_id=owner_id)
+E       AttributeError: type object 'obj' has no attribute 'model_dump'
+
+app\crud.py:29: AttributeError
+_______________________________________________________________________________ test_me_rate_limit_and_avatar_and_default_avatar_admin _______________________________________________________________________________ 
+
+client = <starlette.testclient.TestClient object at 0x000002BD27963680>
+
+    def test_me_rate_limit_and_avatar_and_default_avatar_admin(client: TestClient):
+        client.post("/auth/register", json={"email":"role1@example.com","password":"password123"})
+        r = client.post("/auth/login", data={"username":"role1@example.com","password":"password123"})
+        token_user = r.json()["access_token"]
+        h_user = {"Authorization": f"Bearer {token_user}"}
+        hits = [client.get("/users/me", headers=h_user).status_code for _ in range(7)]
+        assert 200 in hits
+        with open(__file__, "rb") as f:
+            resp = client.post("/users/me/avatar", headers=h_user, files={"file": ("a.txt", f, "text/plain")})
+        assert resp.status_code in (503, 502)
+        db = SessionLocal()
+        u2 = crud.create_user(db, type("obj", (), {"email":"admin1@example.com","password":"password123"}))
+        crud.set_user_role(db, u2.id, "admin")
+        db.close()
+        r2 = client.post("/auth/login", data={"username":"admin1@example.com","password":"password123"})
+>       h_admin = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+E       KeyError: 'access_token'
+
+tests\test_users_and_avatar.py:20: KeyError
 ================================================================================================== warnings summary ================================================================================================== 
 .venv\Lib\site-packages\pydantic\_internal\_config.py:291
 .venv\Lib\site-packages\pydantic\_internal\_config.py:291
@@ -49,14 +124,10 @@ app\main.py:31
 
     return self.router.on_event(event_type)
 
-tests/test_contacts_secured.py::test_contacts_require_verified
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
-tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_contacts_full_flow.py: 8 warnings
+tests/test_contacts_secured.py: 1 warning
+tests/test_users_and_avatar.py: 8 warnings
+tests/test_users_me_rate_limit.py: 7 warnings
   D:\1\FullStackWebPython\HT12\.venv\Lib\site-packages\jose\jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     now = timegm(datetime.utcnow().utctimetuple())
 
@@ -65,19 +136,22 @@ tests/test_users_me_rate_limit.py::test_me_rate_limit
 ---------- coverage: platform win32, python 3.12.3-final-0 -----------
 Name                      Stmts   Miss  Cover   Missing
 -------------------------------------------------------
-app\cache.py                 37     18    51%   23-27, 34-42, 49-55, 59-62
-app\crud.py                 102     73    28%   12, 22, 24, 29-33, 36, 42-53, 56-64, 67-72, 75-92, 97-100, 104-110, 113-114, 117-123
+app\cache.py                 37     15    59%   24, 27, 34-42, 49-55, 59-62
+app\crud.py                 102     16    84%   45, 47, 49, 51, 58, 69, 83-84, 88-89, 97-100, 106, 119
 app\database.py              12      4    67%   17-21
-app\deps.py                  48     11    77%   31-32, 35, 39-41, 47, 53, 58-60
+app\deps.py                  48     10    79%   31-32, 35, 39-41, 47, 58-60
 app\main.py                  36      4    89%   46-47, 59, 64
-app\routers\auth.py         118     60    49%   38-46, 55-56, 78, 86-100, 106-114, 119-131, 136-147
-app\routers\contacts.py      35     15    57%   13, 25, 29-32, 36-39, 43-46, 50
-app\routers\users.py         48     26    46%   17-33, 47-67, 72-73, 78-80
+app\routers\auth.py         118     49    58%   38-46, 55-56, 88-89, 91, 95, 97, 106-114, 119-131, 136-147
+app\routers\contacts.py      35      2    94%   38, 45
+app\routers\users.py         48     14    71%   29, 60-67, 72-73, 78-80
 app\security.py              30      3    90%   41-43
 -------------------------------------------------------
-TOTAL                       571    214    63%
+TOTAL                       573    117    80%
 
 5 files skipped due to complete coverage.
 
 ============================================================================================== short test summary info =============================================================================================== 
-FAILED tests/test_auth_flow.py::test_register_and_login_and_refresh - AssertionError: assert ('access_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token...
+FAILED tests/test_auth_endpoints_more.py::test_register_login_refresh_and_verify - assert 422 == 200
+FAILED tests/test_cache_module_unit.py::test_cache_with_fakeredis - AttributeError: type object 'DummyRedis' has no attribute 'Redis'
+FAILED tests/test_crud_module.py::test_contacts_crud_filters - AttributeError: type object 'obj' has no attribute 'model_dump'
+FAILED tests/test_users_and_avatar.py::test_me_rate_limit_and_avatar_and_default_avatar_admin - KeyError: 'access_token'

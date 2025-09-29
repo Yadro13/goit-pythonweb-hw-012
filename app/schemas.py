@@ -32,6 +32,9 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
 # --- Contacts ---
 class ContactBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
