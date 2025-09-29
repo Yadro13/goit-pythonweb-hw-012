@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Contacts API — UI</title>
+    <link rel="stylesheet" href="/static/styles.css"/>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Contacts API</div>
+      <nav class="nav">
+        <a href="#" data-section="auth">Авторизація</a>
+        <a href="#" data-section="contacts">Контакти</a>
+        <a href="#" data-section="account">Мій акаунт</a>
+        <a href="#" data-section="admin">Адмін</a>
+        <a href="#" data-section="diagnostics">Діагностика</a>
+      </nav>
+    </header>
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+      <small>Простий UI для демонстрації REST API (FastAPI + PostgreSQL).</small>
+    </footer>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
