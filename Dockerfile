@@ -15,4 +15,4 @@ COPY app /app
 # явно добавим корень в PYTHONPATH, чтобы импорт "app.main" точно находился
 ENV PYTHONPATH=/
 
-CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","${PORT}"]
+CMD ["sh","-c","uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
