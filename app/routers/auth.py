@@ -15,36 +15,67 @@ from ..security import create_access_token, create_email_token, decode_token, cr
 from ..settings import settings
 import smtplib, ssl
 from email.message import EmailMessage
+from email.utils import formataddr
 import logging
 import uuid
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = logging.getLogger(__name__)
 
-def send_verify_email(email: str, token: str, request: Request):
-    # Формуємо посилання верифікації
-    host = request.headers.get("host", "localhost:8000")
-    verify_url = f"http://{host}/auth/verify-email?token={token}"
-    msg = EmailMessage()
-    msg["Subject"] = "Verify your email"
-    msg["From"] = "no-reply@example.com"
-    msg["To"] = email
-    msg.set_content(f"Click to verify: {verify_url}")
+def _build_verify_url(request: Request, token: str) -> str:
+    """Побудувати публічний URL верифікації за reverse-proxy (Railway)."""
+    scheme = request.headers.get("x-forwarded-proto") or getattr(request.url, "scheme", "http")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
+    return f"{scheme}://{host}/auth/verify-email?token={token}"
+
+def send_verify_email(email: str, token: str, request: Request) -> None:
+    """Надіслати лист верифікації. Підтримка STARTTLS(587) та SSL(465). 
+    Якщо SMTP не налаштований/помилка — лог і м’яке продовження."""
+    verify_url = _build_verify_url(request, token)
+
     smtp_host = settings.SMTP_HOST
     smtp_user = settings.SMTP_USER
     smtp_pass = settings.SMTP_PASSWORD
-    smtp_port = settings.SMTP_PORT or 587
-    if smtp_host and smtp_user and smtp_pass:
-        try:
-            context = ssl.create_default_context()
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.starttls(context=context)
+    smtp_port = int(settings.SMTP_PORT or 587)
+    # Красивий From: або явно заданий SMTP_FROM, або сам обліковий запис
+    smtp_from = getattr(settings, "SMTP_FROM", None) or smtp_user or "no-reply@example.com"
+
+    # Формуємо лист
+    msg = EmailMessage()
+    msg["Subject"] = "Verify your email"
+    # Якщо SMTP_FROM має вигляд "Name <email>", залишаємо як є; інакше загортаємо красиво
+    if "<" in smtp_from and ">" in smtp_from:
+        msg["From"] = smtp_from
+    else:
+        msg["From"] = formataddr(("", smtp_from))
+    msg["To"] = email
+    msg.set_content(f"Click to verify: {verify_url}")
+
+    # Якщо SMTP не налаштовано — просто лог і вихід
+    if not (smtp_host and smtp_user and smtp_pass):
+        logging.getLogger("uvicorn.error").info("Verify link for %s: %s", email, verify_url)
+        return
+
+    try:
+        context = ssl.create_default_context()
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=15) as server:
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
-        except Exception as e:
-            log.warning("SMTP send failed, falling back to log: %s", e)
-            logging.getLogger("uvicorn.error").info("Verify link for %s: %s", email, verify_url)
-    else:
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        # Успіх — дамо зрозуміти у runtime-логах
+        logging.getLogger("uvicorn.error").info("Verification email sent to %s", email)
+    except smtplib.SMTPAuthenticationError as e:
+        log.warning("SMTP auth failed: %s. Gmail потребує App Password і повний email у SMTP_USER.", e)
+        logging.getLogger("uvicorn.error").info("Verify link for %s: %s", email, verify_url)
+    except Exception as e:
+        log.warning("SMTP send failed, fallback to log: %s", e)
         logging.getLogger("uvicorn.error").info("Verify link for %s: %s", email, verify_url)
 
 @router.post("/register", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED)
@@ -56,19 +87,16 @@ def register(payload: schemas.UserCreate, background: BackgroundTasks, request: 
         raise HTTPException(status_code=409, detail=str(e))
     token = create_email_token(user.email)
 
-    # если SMTP не настроен — покажем ссылку и в лог, и в заголовке ответа
-    from logging import getLogger
+    # Якщо SMTP не налаштовано — підкажемо лінк через заголовок + лог
     if not (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD):
-        verify_url = f"http://{request.headers.get('host','localhost:8000')}/auth/verify-email?token={token}"
-        getLogger("uvicorn.error").info("Verify link for %s: %s", user.email, verify_url)
+        verify_url = _build_verify_url(request, token)
+        logging.getLogger("uvicorn.error").info("Verify link for %s: %s", user.email, verify_url)
         response.headers["X-Verify-Email"] = verify_url
 
-    from logging import getLogger
-    if not (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD):
-        verify_url = f"http://{request.headers.get('host','localhost:8000')}/auth/verify-email?token={token}"
-        getLogger('uvicorn.error').info('Verify link for %s: %s', user.email, verify_url)
+    # Відправка листа — у фоні; якщо впаде — лінк потрапить у лог
     background.add_task(send_verify_email, user.email, token, request)
     return user
+
 
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
