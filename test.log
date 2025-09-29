@@ -1,0 +1,83 @@
+$ python -m pytest -q --cov=app
+ImportError while loading conftest 'D:\1\FullStackWebPython\HT12\tests\conftest.py'.
+tests\conftest.py:5: in <module>
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+E   NameError: name 'sys' is not defined. Did you forget to import 'sys'
+(HT12) 
+denis@Lenovo-YOGA-Den MINGW64 /d/1/FullStackWebPython/HT12
+$ python -m pytest -q --cov=app
+F..                                                                                                                                                                                                             [100%]
+====================================================================================================== FAILURES ====================================================================================================== 
+________________________________________________________________________________________ test_register_and_login_and_refresh _________________________________________________________________________________________ 
+
+client = <starlette.testclient.TestClient object at 0x000001BCFF674F80>
+
+    def test_register_and_login_and_refresh(client: TestClient):
+        # register
+        r = client.post("/auth/register", json={"email":"t1@example.com","password":"password123"})
+        assert r.status_code == 201
+        # verify via link (simulate by grabbing token from /auth/verify-email through fake generate)
+        # проще: логин и работа без verify на контактах запрещена, но /auth/login должен работать
+        r = client.post("/auth/login", data={"username":"t1@example.com","password":"password123"})
+        assert r.status_code == 200
+        data = r.json()
+>       assert "access_token" in data and "refresh_token" in data
+E       AssertionError: assert ('access_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token_type': 'bearer'} and 'refresh_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token_type': 'bearer'})
+
+tests\test_auth_flow.py:13: AssertionError
+================================================================================================== warnings summary ================================================================================================== 
+.venv\Lib\site-packages\pydantic\_internal\_config.py:291
+.venv\Lib\site-packages\pydantic\_internal\_config.py:291
+  D:\1\FullStackWebPython\HT12\.venv\Lib\site-packages\pydantic\_internal\_config.py:291: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+app\main.py:31
+  D:\1\FullStackWebPython\HT12\app\main.py:31: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("startup")
+
+.venv\Lib\site-packages\fastapi\applications.py:4495
+  D:\1\FullStackWebPython\HT12\.venv\Lib\site-packages\fastapi\applications.py:4495: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    return self.router.on_event(event_type)
+
+tests/test_contacts_secured.py::test_contacts_require_verified
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+tests/test_users_me_rate_limit.py::test_me_rate_limit
+  D:\1\FullStackWebPython\HT12\.venv\Lib\site-packages\jose\jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform win32, python 3.12.3-final-0 -----------
+Name                      Stmts   Miss  Cover   Missing
+-------------------------------------------------------
+app\cache.py                 37     18    51%   23-27, 34-42, 49-55, 59-62
+app\crud.py                 102     73    28%   12, 22, 24, 29-33, 36, 42-53, 56-64, 67-72, 75-92, 97-100, 104-110, 113-114, 117-123
+app\database.py              12      4    67%   17-21
+app\deps.py                  48     11    77%   31-32, 35, 39-41, 47, 53, 58-60
+app\main.py                  36      4    89%   46-47, 59, 64
+app\routers\auth.py         118     60    49%   38-46, 55-56, 78, 86-100, 106-114, 119-131, 136-147
+app\routers\contacts.py      35     15    57%   13, 25, 29-32, 36-39, 43-46, 50
+app\routers\users.py         48     26    46%   17-33, 47-67, 72-73, 78-80
+app\security.py              30      3    90%   41-43
+-------------------------------------------------------
+TOTAL                       571    214    63%
+
+5 files skipped due to complete coverage.
+
+============================================================================================== short test summary info =============================================================================================== 
+FAILED tests/test_auth_flow.py::test_register_and_login_and_refresh - AssertionError: assert ('access_token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU5MTcxMTI3LCJzY29wZSI6ImFjY2VzcyJ9.MATeYXiZWKAo6hpsSZlHJjH9zJyv1Bvt3SmHPg3Y0Yc', 'token...

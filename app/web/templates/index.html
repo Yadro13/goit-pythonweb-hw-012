@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contacts UI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    input, button { padding: 6px 10px; margin: 4px; }
+    .row { margin-bottom: 10px; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin: 8px 0; }
+    .muted { color: #777; font-size: 12px; }
+    #contacts { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Contacts API — простий UI</h1>
+  <div class="row">
+    <input id="email" placeholder="email" />
+    <input id="password" placeholder="password" type="password" />
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+    <span id="loginStatus" class="muted"></span>
+  </div>
+  <div class="row">
+    <button onclick="loadMe()">/users/me</button>
+    <button onclick="loadContacts()">/contacts</button>
+    <button onclick="upcoming()">/contacts/birthdays/upcoming</button>
+  </div>
+  <div class="row">
+    <input id="fn" placeholder="first_name" />
+    <input id="ln" placeholder="last_name" />
+    <input id="em" placeholder="email" />
+    <input id="ph" placeholder="phone" />
+    <input id="bd" placeholder="birthday YYYY-MM-DD" />
+    <input id="ex" placeholder="extra" />
+    <button onclick="createContact()">Create</button>
+  </div>
+  <pre id="me"></pre>
+  <div id="contacts"></div>
+
+<script>
+let accessToken = null;
+function api(path, opts={}) {
+  opts.headers = opts.headers || {};
+  if (accessToken) opts.headers["Authorization"] = "Bearer " + accessToken;
+  if (opts.body && !(opts.body instanceof FormData)) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(opts.body);
+  }
+  return fetch(path, opts).then(r => r.json());
+}
+async function register() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const r = await api('/auth/register', {method:'POST', body:{email,password}});
+  alert('Registered: ' + JSON.stringify(r));
+}
+async function login() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const data = new URLSearchParams();
+  data.append('username', email);
+  data.append('password', password);
+  const r = await fetch('/auth/login', {method:'POST', body:data});
+  const j = await r.json();
+  accessToken = j.access_token || null;
+  document.getElementById('loginStatus').textContent = accessToken ? 'Logged in' : 'Login failed';
+}
+async function loadMe() {
+  const m = await api('/users/me');
+  document.getElementById('me').textContent = JSON.stringify(m, null, 2);
+}
+async function loadContacts() {
+  const arr = await api('/contacts');
+  const root = document.getElementById('contacts');
+  root.innerHTML = '';
+  arr.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.textContent = c.first_name + ' ' + c.last_name + ' — ' + c.email;
+    root.appendChild(div);
+  });
+}
+async function upcoming() {
+  const arr = await api('/contacts/birthdays/upcoming?days=7');
+  alert('Upcoming: ' + arr.length);
+}
+async function createContact() {
+  const body = {
+    first_name: fn.value, last_name: ln.value, email: em.value,
+    phone: ph.value, birthday: bd.value, extra: ex.value
+  };
+  const r = await api('/contacts', {method:'POST', body});
+  alert('Created: ' + JSON.stringify(r));
+}
+</script>
+</body>
+</html>
